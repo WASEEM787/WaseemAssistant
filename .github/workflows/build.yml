@@ -4,23 +4,56 @@ name: Build WaseemAssistant APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '.github/workflows/build.yml'
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Download repository
         uses: actions/checkout@v4
 
-      - name: Check Android project
+      - name: Find Android project
+        id: project
+        shell: bash
         run: |
-          echo "Checking repository contents"
-          find . -maxdepth 5 -type f | head -100
-          if find . -name settings.gradle -o -name settings.gradle.kts | grep -q .; then
-            echo "Android Gradle project found."
-          else
-            echo "Android Gradle project not found."
+          PROJECT_DIR="$(find . -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "No Android Gradle project found."
+            echo "The repository must contain settings.gradle or settings.gradle.kts."
             exit 1
           fi
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Found Android project in $PROJECT_DIR"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          else
+            echo "Gradle wrapper missing; using installed Gradle."
+            gradle assembleDebug
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WaseemAssistant-debug-apk
+          path: '**/build/outputs/apk/debug/*.apk'
+          if-no-files-found: error
