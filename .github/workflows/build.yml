@@ -1,3 +1,4 @@
+
 name: Build WaseemAssistant APK
 
 on:
@@ -22,6 +23,31 @@ jobs:
         run: |
           mkdir source
           unzip -q WaseemAssistant-source.zip -d source
+
+      - name: Fix Java version
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("source/WaseemAssistant/app/build.gradle.kts")
+          s = p.read_text()
+
+          block = """compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }"""
+
+          pattern = r'compileOptions\s*\{[^}]*\}'
+
+          if re.search(pattern, s, flags=re.S):
+              s = re.sub(pattern, block, s, count=1, flags=re.S)
+          else:
+              s = s.replace("android {", "android {\n    " + block, 1)
+
+          p.write_text(s)
+          print("Java version updated to 17")
+          PY
 
       - name: Build APK
         run: |
